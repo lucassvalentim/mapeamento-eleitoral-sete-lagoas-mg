@@ -15,3 +15,7 @@ dependencies:
   - idna
   - tzdata
   - urllib3
+  - jupyter
+  - ipykernel
+  - matplotlib
+  - seaborn
