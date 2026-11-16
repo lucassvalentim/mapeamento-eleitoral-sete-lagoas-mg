@@ -10,14 +10,9 @@ from shapely.ops import voronoi_diagram
 import plotly.express as px
 import requests
 
-# ==============================================================================
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTILIZAÇÃO
-# Decisão de Design: Layout wide com fontes ampliadas para facilitar a leitura
-# dos KPIs, rótulos dos gráficos e tooltips geoespaciais.
-# ==============================================================================
+# Configuração da página e estilização
 st.set_page_config(
     page_title="Mapeamento Eleitoral - Sete Lagoas (UFSJ)",
-    page_icon="🗳️",
     layout="wide"
 )
 
@@ -36,17 +31,16 @@ st.markdown("""
     [data-testid="stMetricLabel"] {
         font-size: 17px;
     }
+    /* Remove a seta do delta nos KPIs mantendo apenas o texto/valor absoluto */
+    [data-testid="stMetricDelta"] svg {
+        display: none !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("Análise Espacial e Eleitoral — Sete Lagoas (MG)")
 
-# ==============================================================================
-# 2. MAPEAMENTO DE CORES PARTIDÁRIAS FIXAS (ELEIÇÕES 2026)
-# Decisão de Design: Consistência visual entre gráficos e mapas utilizando
-# Vermelho para Lula (PT), Verde para Flávio Bolsonaro (PL) e cores distintas
-# baseadas nas paletas partidárias dos demais candidatos.
-# ==============================================================================
+# Mapeamento de cores partidárias fixas
 def obter_cor_partido(nome_candidato):
     nome = nome_candidato.upper()
     if "LULA" in nome:
@@ -83,7 +77,7 @@ def obter_cor_partido(nome_candidato):
         return "#6d28d9"
 
 def obter_paleta_folium(candidato):
-    """Retorna escala sequencial para o preenchimento dos polígonos vencidos."""
+    """Retorna escala sequencial para o preenchimento dos polígonos."""
     nome = candidato.upper()
     cor_principal = obter_cor_partido(candidato)
     if "LULA" in nome:
@@ -91,15 +85,9 @@ def obter_paleta_folium(candidato):
     elif "BOLSONARO" in nome:
         return cm.LinearColormap(['#bbf7d0', '#22c55e', '#14532d']), '#14532d'
     else:
-        return cm.LinearColormap(['#e2e8f0', cor_principal]), cor_principal
+        return cm.LinearColormap(['#f1f5f9', cor_principal]), cor_principal
 
-# ==============================================================================
-# 3. CARREGAMENTO DOS DADOS E TESSELAÇÃO DE VORONOI
-# Decisão Metodológica: Como o TSE disponibiliza pontos geográficos exatos
-# dos locais de votação, aplica-se o diagrama de Voronoi recortado pela malha
-# municipal oficial do IBGE (código 3167202 - Sete Lagoas) para representar
-# áreas de influência espacial contínua sem sobreposição.
-# ==============================================================================
+# Carregamento dos dados e tesselação de voronoi
 @st.cache_data(show_spinner="Carregando dados e gerando malha espacial...")
 def carregar_dados_e_malha():
     df = pd.read_csv('dados/processados/votacao_geolocalizada.csv', sep=';')
@@ -117,8 +105,12 @@ def carregar_dados_e_malha():
     except Exception:
         pass
 
+    cols_local = ['NR_ZONA', 'NM_BAIRRO', 'NM_LOCAL_VOTACAO', 'NR_LATITUDE', 'NR_LONGITUDE']
+    if 'DS_ENDERECO' in df.columns:
+        cols_local.append('DS_ENDERECO')
+
     locais = (
-        df[['NR_ZONA', 'NM_BAIRRO', 'NM_LOCAL_VOTACAO', 'NR_LATITUDE', 'NR_LONGITUDE']]
+        df[cols_local]
         .drop_duplicates(subset=['NR_LATITUDE', 'NR_LONGITUDE'])
         .reset_index(drop=True)
     )
@@ -148,10 +140,7 @@ def carregar_dados_e_malha():
 
 df, gdf_locais, bounds_sl, CORES_CANDIDATOS = carregar_dados_e_malha()
 
-# ==============================================================================
-# 4. BARRA LATERAL (FILTROS INTERATIVOS)
-# ==============================================================================
-
+# Barra Lateral
 turno_selecionado = st.sidebar.radio(
     "Turno:",
     options=[1, 2],
@@ -172,9 +161,7 @@ df_turno = df[(df['NR_TURNO'] == turno_selecionado) & (df['NR_ZONA'].isin(zonas_
 df_validos = df_turno[df_turno['IS_VALIDO']].copy()
 df_analise = df_turno if incluir_brancos_nulos else df_validos
 
-# ==============================================================================
-# 5. INDICADORES PRINCIPAIS (KPIs)
-# ==============================================================================
+# Indicadores Principais
 total_votos_validos = int(df_validos['QT_VOTOS'].sum())
 total_brancos_nulos = int(df_turno[~df_turno['IS_VALIDO']]['QT_VOTOS'].sum())
 ranking_geral = df_validos.groupby('NM_VOTAVEL')['QT_VOTOS'].sum().sort_values(ascending=False)
@@ -189,15 +176,49 @@ segundo_perc = (segundo_votos / total_votos_validos * 100) if total_votos_valido
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Votos Válidos", f"{total_votos_validos:,}".replace(",", "."))
-col2.metric(f"1º Lugar ({lider_nome.split()[0]})", f"{lider_perc:.2f}%", f"{lider_votos:,} votos".replace(",", "."))
-col3.metric(f"2º Lugar ({segundo_nome.split()[0]})", f"{segundo_perc:.2f}%", f"{segundo_votos:,} votos".replace(",", "."))
-col4.metric("Brancos e Nulos", f"{total_brancos_nulos:,}".replace(",", "."), f"{len(df_turno['id_local'].unique())} locais")
+col2.metric(f"1º Lugar ({lider_nome.split()[0]})", f"{lider_perc:.2f}%", f"{lider_votos:,} votos".replace(",", "."), delta_color="off")
+col3.metric(f"2º Lugar ({segundo_nome.split()[0]})", f"{segundo_perc:.2f}%", f"{segundo_votos:,} votos".replace(",", "."), delta_color="off")
+col4.metric("Brancos e Nulos", f"{total_brancos_nulos:,}".replace(",", "."), f"{len(df_turno['id_local'].unique())} locais", delta_color="off")
 
 st.divider()
 
-# ==============================================================================
-# 6. FUNÇÕES DE CONSTRUÇÃO DOS MAPAS FOLIUM
-# ==============================================================================
+# Funções de construção dos mapas FOLIUM e interatividade
+def injetar_estilos_interativos_mapa(mapa):
+    """
+    Remove o retângulo de foco ao clicar no polígono SVG, suaviza o hover
+    e força a cor preta nos textos da legenda e tooltip mesmo no modo noturno.
+    """
+    css = """
+    <style>
+        .leaflet-container *:focus,
+        .leaflet-interactive:focus,
+        path.leaflet-interactive:focus,
+        svg path:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        path.leaflet-interactive {
+            cursor: pointer !important;
+            transition: fill-opacity 0.15s ease, stroke-width 0.15s ease, stroke 0.15s ease;
+        }
+        /* Garante que a legenda e tooltips mantenham texto preto mesmo em modo noturno */
+        #legenda-mapa-eleitoral,
+        #legenda-mapa-eleitoral div,
+        #legenda-mapa-eleitoral span,
+        #legenda-mapa-eleitoral b,
+        .leaflet-tooltip,
+        .leaflet-tooltip * {
+            color: #000000 !important;
+        }
+        .legend.leaflet-control text,
+        .legend.leaflet-control .caption {
+            fill: #000000 !important;
+            color: #000000 !important;
+        }
+    </style>
+    """
+    mapa.get_root().header.add_child(folium.Element(css))
+
 def preparar_dados_espaciais(df_base):
     totais = df_base.groupby('id_local')['QT_VOTOS'].sum().reset_index(name='total_votos')
     votos = df_base.groupby(['id_local', 'NM_VOTAVEL'])['QT_VOTOS'].sum().reset_index().merge(totais, on='id_local')
@@ -235,6 +256,7 @@ def construir_mapa_dominancia_geral(df_base, turno):
         min_zoom=11,
         tiles='OpenStreetMap'
     )
+    injetar_estilos_interativos_mapa(mapa)
     mapa.fit_bounds(bounds_sl)
 
     escalas_candidatos = {}
@@ -253,21 +275,34 @@ def construir_mapa_dominancia_geral(df_base, turno):
         perc = props.get('perc_vencedor', 50)
         if vencedor in escalas_candidatos:
             cor_fill = escalas_candidatos[vencedor](perc)
-            return {'fillColor': cor_fill, 'color': '#2c3e50', 'weight': 1.5, 'fillOpacity': 0.74}
+            return {'fillColor': cor_fill, 'color': '#2c3e50', 'weight': 1.5, 'fillOpacity': 0.72}
         return {'fillColor': 'transparent', 'color': '#636e72', 'weight': 1, 'fillOpacity': 0.0}
+
+    def highlight_fn(feature):
+        props = feature['properties']
+        vencedor = props.get('vencedor')
+        perc = props.get('perc_vencedor', 50)
+        cor_fill = escalas_candidatos[vencedor](perc) if vencedor in escalas_candidatos else '#94a3b8'
+        return {
+            'fillColor': cor_fill,
+            'color': '#0f172a',
+            'weight': 3.5,
+            'fillOpacity': 0.90
+        }
 
     tooltip = folium.GeoJsonTooltip(
         fields=['NR_ZONA', 'NM_BAIRRO', 'NM_LOCAL_VOTACAO', 'lider_texto', 'placar_texto'],
         aliases=['Zona:', 'Bairro:', 'Local de Votação:', f'Líder ({turno}º T):', 'Top Candidatos:'],
         localize=True,
         labels=True,
-        style="background-color: #fff; border: 2px solid #2c3e50; border-left: 6px solid #2c3e50; border-radius: 6px; font-family: Arial; font-size: 13px; padding: 8px;"
+        style="background-color: #ffffff; color: #000000; border: 2px solid #2c3e50; border-left: 6px solid #2c3e50; border-radius: 6px; font-family: Arial; font-size: 13px; padding: 8px;"
     )
 
     folium.GeoJson(
         gdf_mapa,
         name=f"Dominância Geral ({turno}º Turno)",
         style_function=style_fn,
+        highlight_function=highlight_fn,
         tooltip=tooltip
     ).add_to(mapa)
 
@@ -277,18 +312,23 @@ def construir_mapa_dominancia_geral(df_base, turno):
         cor = CORES_CANDIDATOS[cand]
         qtd_vitorias = int((gdf_mapa['vencedor'] == cand).sum())
         itens_legenda += f"""
-        <div style="display: flex; align-items: center; margin-bottom: 5px;">
-            <span style="background:{cor}; width:15px; height:15px; display:inline-block; margin-right:8px; border:1px solid #333; border-radius:3px;"></span>
-            <span><b>{cand}</b> ({qtd_vitorias} locais)</span>
+        <div style="display: flex; align-items: center; margin-bottom: 5px; color: #000000;">
+            <span style="background:{cor}; width:15px; height:15px; display:inline-block; margin-right:8px; border:1px solid #000000; border-radius:3px; flex-shrink: 0;"></span>
+            <span style="color: #000000;"><b style="color: #000000;">{cand}</b> ({qtd_vitorias} locais)</span>
         </div>
         """
 
     legenda_html = f"""
-    <div style="position: fixed; bottom: 25px; left: 25px; z-index: 9999; background-color: rgba(255, 255, 255, 0.95);
-                padding: 12px 15px; border: 2px solid #2c3e50; border-radius: 8px; font-family: Arial; font-size: 13px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.25); max-height: 280px; overflow-y: auto;">
-        <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid #ccc; padding-bottom: 4px;">
-            Candidatos — {turno}º Turno
+    <div id="legenda-mapa-eleitoral" style="position: fixed; bottom: 25px; left: 25px; z-index: 9999; background-color: #ffffff;
+                color: #000000; padding: 12px 15px; border: 2px solid #000000; border-radius: 8px; font-family: Arial; font-size: 13px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.35); max-height: 280px; overflow-y: auto;">
+        <div style="margin-bottom: 8px; border-bottom: 1px solid #000000; padding-bottom: 6px; color: #000000;">
+            <div style="font-weight: bold; font-size: 14px; color: #000000;">
+                Vencedor por Área — {turno}º Turno
+            </div>
+            <div style="font-size: 11px; font-weight: normal; margin-top: 2px; color: #000000;">
+                (n) = total de locais onde liderou
+            </div>
         </div>
         {itens_legenda}
     </div>
@@ -299,14 +339,8 @@ def construir_mapa_dominancia_geral(df_base, turno):
     return mapa
 
 def construir_mapa_individual_dominancia(df_base, turno, candidato):
-    """
-    Regra estrita: pinta SOMENTE as áreas onde o candidato selecionado venceu.
-    Se ele não venceu nenhuma área, nenhuma área é pintada (preenchimento transparente).
-    O tooltip exibe exclusivamente os dados do candidato selecionado.
-    """
     gdf_mapa, votos_detalhe = preparar_dados_espaciais(df_base)
     
-    # Filtra votos absolutos e percentuais exclusivamente do candidato escolhido
     votos_cand = votos_detalhe[votos_detalhe['NM_VOTAVEL'] == candidato][['id_local', 'QT_VOTOS', 'percentual']].copy()
     votos_cand = votos_cand.rename(columns={'QT_VOTOS': 'votos_cand', 'percentual': 'perc_cand'})
     
@@ -323,6 +357,7 @@ def construir_mapa_individual_dominancia(df_base, turno, candidato):
         min_zoom=11,
         tiles='OpenStreetMap'
     )
+    injetar_estilos_interativos_mapa(mapa)
     mapa.fit_bounds(bounds_sl)
 
     paleta_base, cor_destaque = obter_paleta_folium(candidato)
@@ -330,66 +365,218 @@ def construir_mapa_individual_dominancia(df_base, turno, candidato):
     tem_vitorias = len(vitorias_cand) > 0
 
     if tem_vitorias:
-        vmin = vitorias_cand.min()
-        vmax = vitorias_cand.max()
+        valores_escala = vitorias_cand
+        legenda_titulo = f'{turno}º Turno: Áreas Vencidas por {candidato} (%)'
+    else:
+        valores_escala = gdf_ind[gdf_ind['votos_cand'] > 0]['perc_cand']
+        legenda_titulo = f'{turno}º Turno: Votação de {candidato} por Local (%)'
+
+    if len(valores_escala) > 0:
+        vmin = float(valores_escala.min())
+        vmax = float(valores_escala.max())
         if vmin == vmax:
-            vmin = max(0, vmin - 5)
-            vmax = vmax + 5
+            vmin = max(0.0, vmin - 1.0)
+            vmax = vmax + 1.0
         colormap = paleta_base.scale(vmin, vmax)
-        colormap.caption = f'{turno}º Turno: Áreas Vencidas por {candidato} (%)'
+        colormap.caption = legenda_titulo
         colormap.add_to(mapa)
     else:
         colormap = None
 
+    def deve_pintar(props):
+        if colormap is None:
+            return False
+        if tem_vitorias:
+            return props.get('vencedor') == candidato
+        return props.get('votos_cand', 0) > 0
+
     def style_fn(feature):
         props = feature['properties']
-        # Pinta SOMENTE se o candidato venceu no local; caso contrário, não pinta nada
-        if tem_vitorias and props.get('vencedor') == candidato:
+        if deve_pintar(props):
             val = props.get('perc_cand', 0)
             return {'fillColor': colormap(val), 'color': '#2c3e50', 'weight': 1.5, 'fillOpacity': 0.74}
         return {'fillColor': 'transparent', 'color': '#64748b', 'weight': 1.0, 'fillOpacity': 0.0}
 
-    # Tooltip exibindo SOMENTE a informação do candidato selecionado
+    def highlight_fn(feature):
+        props = feature['properties']
+        if deve_pintar(props):
+            val = props.get('perc_cand', 0)
+            return {'fillColor': colormap(val), 'color': '#0f172a', 'weight': 3.5, 'fillOpacity': 0.90}
+        return {'fillColor': cor_destaque, 'color': '#0f172a', 'weight': 3.5, 'fillOpacity': 0.30}
+
     tooltip = folium.GeoJsonTooltip(
         fields=['NR_ZONA', 'NM_BAIRRO', 'NM_LOCAL_VOTACAO', 'resultado_cand'],
         aliases=['Zona:', 'Bairro:', 'Local de Votação:', f'{candidato} ({turno}º T):'],
         localize=True,
         labels=True,
-        style=f"background-color: #fff; border: 2px solid {cor_destaque}; border-left: 6px solid {cor_destaque}; border-radius: 6px; font-family: Arial; font-size: 13px; padding: 8px;"
+        style=f"background-color: #ffffff; color: #000000; border: 2px solid {cor_destaque}; border-left: 6px solid {cor_destaque}; border-radius: 6px; font-family: Arial; font-size: 13px; padding: 8px;"
     )
 
     folium.GeoJson(
         gdf_ind,
         name=candidato,
         style_function=style_fn,
+        highlight_function=highlight_fn,
         tooltip=tooltip
     ).add_to(mapa)
     folium.LayerControl().add_to(mapa)
 
     return mapa
 
-# ==============================================================================
-# 7. ABAS DO DASHBOARD
-# ==============================================================================
+def identificar_local_clicado(retorno_mapa):
+    """Identifica o registro correspondente em gdf_locais ao clicar em um polígono."""
+    if not retorno_mapa:
+        return None
+
+    drawing = retorno_mapa.get("last_active_drawing")
+    if drawing and isinstance(drawing, dict):
+        props = drawing.get("properties", {})
+        if "id_local" in props:
+            match = gdf_locais[gdf_locais["id_local"] == str(props["id_local"])]
+            if not match.empty:
+                return match.iloc[0]
+
+    clicked = retorno_mapa.get("last_clicked")
+    if clicked and "lat" in clicked and "lng" in clicked:
+        ponto = Point(clicked["lng"], clicked["lat"])
+        contem = gdf_locais[gdf_locais.geometry.contains(ponto)]
+        if not contem.empty:
+            return contem.iloc[0]
+
+    return None
+
+def renderizar_detalhes_zona_clicada(local_clicado):
+    """
+    Exibe todos os locais de votação da zona eleitoral do polígono clicado
+    e a quantidade de votos de cada candidato por local nos 1º e 2º turnos.
+    """
+    zona_clicada = int(local_clicado["NR_ZONA"])
+    local_selecionado_nome = local_clicado["NM_LOCAL_VOTACAO"]
+    id_local_clicado = str(local_clicado["id_local"])
+
+    st.divider()
+    st.subheader(f"Detalhamento da Zona Eleitoral {zona_clicada}")
+    endereco_txt = f" — {local_clicado['DS_ENDERECO'].strip()}" if 'DS_ENDERECO' in local_clicado and pd.notna(local_clicado['DS_ENDERECO']) else ""
+    st.info(
+        f"**Polígono selecionado:** {local_selecionado_nome} "
+        f"(Bairro **{local_clicado['NM_BAIRRO']}**{endereco_txt})"
+    )
+
+    df_zona = df[(df["NR_ZONA"] == zona_clicada) & (df["NR_TURNO"].isin([1, 2]))].copy()
+    if not incluir_brancos_nulos:
+        df_zona = df_zona[df_zona["IS_VALIDO"]]
+
+    cols_locais = ["id_local", "NM_LOCAL_VOTACAO", "NM_BAIRRO"]
+    if "NR_LOCAL_VOTACAO" in df_zona.columns:
+        cols_locais.insert(1, "NR_LOCAL_VOTACAO")
+    if "DS_ENDERECO" in df_zona.columns:
+        cols_locais.append("DS_ENDERECO")
+
+    locais_da_zona = (
+        df_zona[cols_locais]
+        .drop_duplicates(subset=["id_local"])
+        .sort_values(["NM_BAIRRO", "NM_LOCAL_VOTACAO"])
+        .copy()
+    )
+    if "DS_ENDERECO" in locais_da_zona.columns:
+        locais_da_zona["DS_ENDERECO"] = locais_da_zona["DS_ENDERECO"].fillna("").str.strip()
+
+    locais_da_zona["Status"] = locais_da_zona["id_local"].apply(
+        lambda x: "Local Clicado" if str(x) == id_local_clicado else ""
+    )
+
+    colunas_exibir_locais = ["Status"] + [c for c in cols_locais if c != "id_local"]
+    renomear_locais = {
+        "NR_LOCAL_VOTACAO": "Cód. Local",
+        "NM_LOCAL_VOTACAO": "Local de Votação",
+        "NM_BAIRRO": "Bairro",
+        "DS_ENDERECO": "Endereço",
+    }
+
+    st.markdown(f"**Locais de votação dentro da Zona {zona_clicada} ({len(locais_da_zona)} locais):**")
+    st.dataframe(
+        locais_da_zona[colunas_exibir_locais].rename(columns=renomear_locais),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown(f"**Votos por Candidato em cada Local de Votação — Zona {zona_clicada} (1º e 2º Turnos):**")
+
+    votos_por_turno = (
+        df_zona.groupby(
+            ["id_local", "NM_LOCAL_VOTACAO", "NM_BAIRRO", "NR_VOTAVEL", "NM_VOTAVEL", "NR_TURNO"],
+            as_index=False
+        )["QT_VOTOS"]
+        .sum()
+    )
+
+    tabela_votos = (
+        votos_por_turno.pivot_table(
+            index=["id_local", "NM_LOCAL_VOTACAO", "NM_BAIRRO", "NR_VOTAVEL", "NM_VOTAVEL"],
+            columns="NR_TURNO",
+            values="QT_VOTOS",
+            fill_value=0
+        )
+        .reset_index()
+    )
+
+    for t in [1, 2]:
+        if t not in tabela_votos.columns:
+            tabela_votos[t] = 0
+
+    tabela_votos[1] = tabela_votos[1].astype(int)
+    tabela_votos[2] = tabela_votos[2].astype(int)
+
+    tabela_votos["_prioridade_clicado"] = (tabela_votos["id_local"].astype(str) != id_local_clicado).astype(int)
+    tabela_votos = (
+        tabela_votos.sort_values(
+            by=["_prioridade_clicado", "NM_LOCAL_VOTACAO", 2, 1],
+            ascending=[True, True, False, False]
+        )
+        .drop(columns=["_prioridade_clicado", "id_local"])
+        .rename(columns={
+            "NM_LOCAL_VOTACAO": "Local de Votação",
+            "NM_BAIRRO": "Bairro",
+            "NR_VOTAVEL": "Número",
+            "NM_VOTAVEL": "Candidato",
+            1: "Votos 1º Turno",
+            2: "Votos 2º Turno"
+        })
+    )
+
+    st.dataframe(tabela_votos, use_container_width=True, hide_index=True)
+
+# Abas do dashboard
 tab_mapas, tab_candidatos, tab_bairros, tab_dados = st.tabs([
-    "🗺️ Mapas Geoespaciais",
-    "📊 Todos os Candidatos",
-    "🏘️ Análise por Bairro e Zona",
-    "📋 Tabela de Dados"
+    "Mapas Geoespaciais",
+    "Todos os Candidatos",
+    "Análise por Bairro e Zona",
+    "Tabela de Dados"
 ])
 
 # --- ABA 1: MAPAS ---
 with tab_mapas:
     sub_mapa1, sub_mapa2 = st.tabs([
-        "🏆 Mapa por Dominância (Todos os Candidatos)",
-        "🔍 Mapa Individual por Candidato"
+        "Mapa por Dominância (Todos os Candidatos)",
+        "Mapa Individual por Candidato"
     ])
 
     with sub_mapa1:
         st.subheader(f"Dominância Territorial — {turno_selecionado}º Turno")
         if len(df_validos) > 0:
             mapa_dom = construir_mapa_dominancia_geral(df_validos, turno_selecionado)
-            st_folium(mapa_dom, width=None, height=620, returned_objects=[])
+            retorno_dom = st_folium(
+                mapa_dom,
+                width=None,
+                height=620,
+                returned_objects=["last_active_drawing", "last_clicked"],
+                key="mapa_dominancia_geral"
+            )
+            local_clicado_dom = identificar_local_clicado(retorno_dom)
+            if local_clicado_dom is not None:
+                renderizar_detalhes_zona_clicada(local_clicado_dom)
+            else:
+                st.caption("Clique em qualquer polígono no mapa para visualizar todos os locais da respectiva zona eleitoral e os votos de cada candidato nos 1º e 2º turnos.")
         else:
             st.warning("Selecione pelo menos uma zona eleitoral na barra lateral.")
 
@@ -400,7 +587,18 @@ with tab_mapas:
 
         if cand_escolhido and len(df_validos) > 0:
             mapa_ind = construir_mapa_individual_dominancia(df_validos, turno_selecionado, cand_escolhido)
-            st_folium(mapa_ind, width=None, height=620, returned_objects=[])
+            retorno_ind = st_folium(
+                mapa_ind,
+                width=None,
+                height=620,
+                returned_objects=["last_active_drawing", "last_clicked"],
+                key="mapa_individual_candidato"
+            )
+            local_clicado_ind = identificar_local_clicado(retorno_ind)
+            if local_clicado_ind is not None:
+                renderizar_detalhes_zona_clicada(local_clicado_ind)
+            else:
+                st.caption("Clique em qualquer polígono no mapa para visualizar todos os locais da respectiva zona eleitoral e os votos de cada candidato nos 1º e 2º turnos.")
 
 # --- ABA 2: TODOS OS CANDIDATOS ---
 with tab_candidatos:
@@ -414,8 +612,8 @@ with tab_candidatos:
     resumo_cands['Percentual (%)'] = (resumo_cands['QT_VOTOS'] / resumo_cands['QT_VOTOS'].sum() * 100).round(2)
 
     sub_c1, sub_c2 = st.tabs([
-        "📊 Ranking Total e Proporção",
-        "📈 Comparativo 1º vs 2º Turno"
+        "Ranking Total e Proporção",
+        "Comparativo 1º vs 2º Turno"
     ])
 
     with sub_c1:
@@ -448,14 +646,19 @@ with tab_candidatos:
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with col_g2:
+            # Filtra o gráfico de rosca apenas para Lula e Flávio Bolsonaro
+            resumo_lula_flavio = resumo_cands[
+                resumo_cands['NM_VOTAVEL'].str.upper().str.contains('LULA|BOLSONARO', na=False)
+            ].copy()
+
             fig_pie = px.pie(
-                resumo_cands,
+                resumo_lula_flavio,
                 values='QT_VOTOS',
                 names='NM_VOTAVEL',
                 color='NM_VOTAVEL',
                 color_discrete_map=CORES_CANDIDATOS,
                 hole=0.42,
-                title="Fatia de Votos no Município"
+                title="Proporção de Votos (Lula vs. Flávio Bolsonaro)"
             )
             fig_pie.update_traces(
                 textposition='inside',
@@ -471,38 +674,42 @@ with tab_candidatos:
             st.plotly_chart(fig_pie, use_container_width=True)
 
     with sub_c2:
-        df_comp = df[(df['NR_ZONA'].isin(zonas_selecionadas)) & (df['IS_VALIDO'])].copy()
+        # Filtra o comparativo entre 1º e 2º turnos apenas para Lula e Flávio Bolsonaro
+        df_comp = df[
+            (df['NR_ZONA'].isin(zonas_selecionadas))
+            & (df['IS_VALIDO'])
+            & (df['NM_VOTAVEL'].str.upper().str.contains('LULA|BOLSONARO', na=False))
+        ].copy()
         comp_turnos = df_comp.groupby(['NR_TURNO', 'NM_VOTAVEL'], as_index=False)['QT_VOTOS'].sum()
         comp_turnos['Turno'] = comp_turnos['NR_TURNO'].astype(str) + "º Turno"
 
         fig_comp = px.bar(
             comp_turnos,
-            x='NM_VOTAVEL',
+            x='Turno',
             y='QT_VOTOS',
             color='NM_VOTAVEL',
             color_discrete_map=CORES_CANDIDATOS,
-            facet_col='Turno',
+            barmode='group',
             text_auto=True,
-            title="Comparação Direta de Votos: 1º Turno vs. 2º Turno",
-            labels={'NM_VOTAVEL': 'Candidato', 'QT_VOTOS': 'Votos'}
+            title="Comparação Direta de Votos (Lula vs. Flávio Bolsonaro): 1º Turno vs. 2º Turno",
+            labels={'Turno': 'Turno', 'NM_VOTAVEL': 'Candidato', 'QT_VOTOS': 'Votos'}
         )
         fig_comp.update_traces(textfont=dict(size=15), textposition='outside')
-        fig_comp.update_xaxes(categoryorder='total descending', tickfont=dict(size=14), title_font=dict(size=16))
+        fig_comp.update_xaxes(categoryorder='array', categoryarray=['1º Turno', '2º Turno'], tickfont=dict(size=15), title_font=dict(size=16))
         fig_comp.update_yaxes(tickfont=dict(size=14), title_font=dict(size=16), range=[0, comp_turnos['QT_VOTOS'].max() * 1.15])
         fig_comp.update_layout(
             title={'font': {'size': 20}},
             font=dict(size=15),
-            showlegend=False,
+            legend_title_text='Candidato',
             height=540
         )
-        fig_comp.for_each_annotation(lambda a: a.update(text=f"<b>{a.text.split('=')[-1]}</b>", font=dict(size=17)))
         st.plotly_chart(fig_comp, use_container_width=True)
 
 # --- ABA 3: BAIRROS E ZONAS ---
 with tab_bairros:
     st.subheader(f"Análise Territorial por Bairro e Zona Eleitoral ({turno_selecionado}º Turno)")
     
-    sub_b1, sub_b2 = st.tabs(["🏘️ Top Bairros por Candidato", "🧭 Comparativo entre Zonas Eleitorais"])
+    sub_b1, sub_b2 = st.tabs(["Top Bairros por Candidato", "Comparativo entre Zonas Eleitorais"])
     
     with sub_b1:
         top_n = st.slider("Número de bairros para exibir:", min_value=5, max_value=30, value=15)
@@ -562,7 +769,7 @@ with tab_dados:
 
     csv_download = tabela_exibicao.to_csv(index=False, sep=';').encode('utf-8')
     st.download_button(
-        label="📥 Baixar Tabela Filtrada (CSV)",
+        label="Baixar Tabela Filtrada (CSV)",
         data=csv_download,
         file_name=f"votacao_sete_lagoas_{turno_selecionado}turno.csv",
         mime="text/csv"
