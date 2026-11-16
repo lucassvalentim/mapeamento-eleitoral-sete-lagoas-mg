@@ -8,6 +8,8 @@ dependencies:
   - numpy=2.5.4
   - geopandas=1.1.1
   - folium=0.19.5
+  - shapely
+  - branca
   - requests=2.34.2
   - python-dateutil=4.0.0
   - certifi
@@ -19,3 +21,8 @@ dependencies:
   - ipykernel
   - matplotlib
   - seaborn
+  - streamlit
+  - plotly
+  - pip
+  - pip:
+      - streamlit-folium
