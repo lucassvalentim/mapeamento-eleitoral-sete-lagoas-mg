@@ -96,12 +96,18 @@ def carregar_dados_e_malha():
     df['IS_VALIDO'] = ~df['NM_VOTAVEL'].str.upper().isin(['VOTO BRANCO', 'VOTO NULO'])
     
     poligono_cidade = None
+    caminho_malha_local = "dados/malha_sete_lagoas.geojson"
     try:
-        url_sl = "https://servicodados.ibge.gov.br/api/v3/malhas/municipios/3167202?formato=application/vnd.geo+json"
-        resp = requests.get(url_sl, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-        if resp.status_code == 200:
-            gdf_mun = gpd.read_file(resp.text).to_crs(epsg=4326)
+        import os
+        if os.path.exists(caminho_malha_local):
+            gdf_mun = gpd.read_file(caminho_malha_local).to_crs(epsg=4326)
             poligono_cidade = gdf_mun.geometry.union_all()
+        else:
+            url_sl = "https://servicodados.ibge.gov.br/api/v3/malhas/municipios/3167202?formato=application/vnd.geo+json"
+            resp = requests.get(url_sl, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+            if resp.status_code == 200:
+                gdf_mun = gpd.read_file(resp.text).to_crs(epsg=4326)
+                poligono_cidade = gdf_mun.geometry.union_all()
     except Exception:
         pass
 
