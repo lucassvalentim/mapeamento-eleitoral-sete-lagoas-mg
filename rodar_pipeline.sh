@@ -16,8 +16,8 @@ echo "=== 2. Configurando e ativando ambiente Conda ($ENV_NAME) ==="
 eval "$(conda shell.bash hook)"
 
 if ! conda info --envs | grep -q "^$ENV_NAME "; then
-    echo "Ambiente '$ENV_NAME' não encontrado. Criando a partir de environment.yml..."
-    conda env create -f "$PROJETO_DIR/environment.yml"
+    echo "Ambiente '$ENV_NAME' não encontrado. Criando a partir de enviroment/enviroment.yml..."
+    conda env create -f "$PROJETO_DIR/enviroment/enviroment.yml"
 else
     echo "Ambiente '$ENV_NAME' já existe."
 fi
