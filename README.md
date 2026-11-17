@@ -8,7 +8,7 @@ O projeto consolida uma base geoespacial cruzando as **zonas e locais de votaç�
 
 A aplicação está publicada e acessível online via **Streamlit Community Cloud**:
 
-- **Link do Deploy:** `https://seu-app-aqui.streamlit.app` _(em andamento)_
+- **Link do Deploy:** `https://mapeamento-eleitoral-sete-lagoas-m.streamlit.app/`
 
 ### Executar Localmente
 
