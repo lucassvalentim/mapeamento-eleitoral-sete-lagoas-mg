@@ -26,18 +26,18 @@ streamlit run app.py
 
 ```text
 mapeamento-eleitoral-sete-lagoas-mg/
-├── app.py                         # Aplicação principal do dashboard interativo (Streamlit)
-├── requirements.txt               # Dependências Python utilizadas no deploy (Streamlit Cloud)
-├── rodar_pipeline.sh              # Script Bash para criar o ambiente virtual e automatizar o pipeline
+├── app.py                         
+├── requirements.txt
+├── rodar_pipeline.sh             
 ├── enviroment/
-│   └── enviroment.yml             # Especificação completa do ambiente Conda para ETL e geoprocessamento
+│   └── enviroment.yml            
 ├── dados/
-│   ├── brutos/                    # [Não versionado] Arquivos originais baixados e extraídos do TSE
+│   ├── brutos/                    
 │   └── processados/
-│       └── votacao_geolocalizada.csv  # Base final já consolidada (zonas + coordenadas + 1º e 2º turnos)
+│       └── votacao_geolocalizada.csv  
 ├── scripts/
-│   ├── baixar_dados_tse.py        # Baixa e extrai os arquivos oficiais do portal de Dados Abertos do TSE
-│   └── coleta_processa_dados.py   # Filtra Sete Lagoas (MG), cruza coordenadas e gera a base final
+│   ├── baixar_dados_tse.py        
+│   └── coleta_processa_dados.py   
 └── README.md
 ```
 
